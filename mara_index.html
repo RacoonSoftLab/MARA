@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>MARA — Modelo de Autorregulación por Inteligencia Artificial</title>
+  <meta name="description" content="Multi-agent LSTM-SAC system with shared trunk and cross-domain transfer. Adaptive resource management under stochastic demand."/>
+  <meta name="author" content="Leonardo Esquivel — RacoonSoftLab"/>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Syne:wght@400;500;700;800&display=swap" rel="stylesheet"/>
+  <style>
+    :root {
+      --bg:     #0a0c0f;
+      --bg2:    #0f1217;
+      --bg3:    #151921;
+      --border: rgba(255,255,255,0.07);
+      --accent: #00e5a0;
+      --accent2:#7c6bff;
+      --text:   #e8eaf0;
+      --muted:  rgba(232,234,240,0.45);
+      --mono:   'Space Mono', monospace;
+      --sans:   'Syne', sans-serif;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body { background: var(--bg); color: var(--text); font-family: var(--sans); overflow-x: hidden; }
+
+    /* LANG TOGGLE */
+    .lang-toggle { display: flex; align-items: center; border: 1px solid var(--border); border-radius: 3px; overflow: hidden; flex-shrink: 0; }
+    .lang-btn { font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; padding: 6px 12px; background: transparent; color: var(--muted); border: none; cursor: pointer; transition: background 0.15s, color 0.15s; }
+    .lang-btn.active { background: var(--accent); color: #050605; font-weight: 700; }
+    .lang-btn:not(.active):hover { color: var(--text); background: rgba(255,255,255,0.05); }
+
+    /* NAV */
+    nav { display: flex; align-items: center; justify-content: space-between; padding: 20px 48px; border-bottom: 1px solid var(--border); position: sticky; top: 0; background: rgba(10,12,15,0.88); backdrop-filter: blur(12px); z-index: 100; gap: 16px; }
+    .nav-logo { font-family: var(--mono); font-size: 13px; color: var(--accent); letter-spacing: 0.08em; text-transform: uppercase; white-space: nowrap; }
+    .nav-logo span { color: var(--muted); }
+    .nav-links { display: flex; gap: 28px; list-style: none; }
+    .nav-links a { font-family: var(--mono); font-size: 11px; color: var(--muted); text-decoration: none; letter-spacing: 0.1em; text-transform: uppercase; transition: color 0.2s; white-space: nowrap; }
+    .nav-links a:hover { color: var(--accent); }
+    .nav-right { display: flex; align-items: center; gap: 12px; }
+    .nav-badge { font-family: var(--mono); font-size: 10px; color: var(--accent); border: 1px solid rgba(0,229,160,0.3); padding: 4px 10px; border-radius: 2px; letter-spacing: 0.08em; white-space: nowrap; }
+
+    /* HERO */
+    .hero { position: relative; padding: 96px 48px 72px; overflow: hidden; min-height: 500px; display: flex; flex-direction: column; justify-content: flex-end; }
+    .hero-grid { position: absolute; inset: 0; background-image: linear-gradient(rgba(0,229,160,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(0,229,160,0.04) 1px, transparent 1px); background-size: 48px 48px; mask-image: radial-gradient(ellipse 80% 70% at 50% 0%, black 30%, transparent 100%); }
+    .hero-glow { position: absolute; top: -120px; left: 50%; transform: translateX(-50%); width: 640px; height: 440px; background: radial-gradient(ellipse, rgba(124,107,255,0.18) 0%, transparent 70%); pointer-events: none; }
+    .hero-tag { font-family: var(--mono); font-size: 11px; color: var(--accent); letter-spacing: 0.15em; text-transform: uppercase; margin-bottom: 20px; display: flex; align-items: center; gap: 10px; }
+    .hero-tag::before { content: ''; display: inline-block; width: 24px; height: 1px; background: var(--accent); }
+    .hero-title { font-size: clamp(34px, 5.5vw, 62px); font-weight: 800; line-height: 1.0; letter-spacing: -0.03em; margin-bottom: 8px; max-width: 760px; }
+    .hero-title em { font-style: normal; color: var(--accent); }
+    .hero-title .dim { color: rgba(232,234,240,0.35); }
+    .hero-subtitle { font-family: var(--mono); font-size: 12px; color: var(--muted); letter-spacing: 0.05em; margin-bottom: 44px; max-width: 580px; line-height: 1.9; }
+    .hero-subtitle strong { color: rgba(232,234,240,0.75); }
+    .hero-ctas { display: flex; gap: 12px; flex-wrap: wrap; }
+    .btn-primary { font-family: var(--mono); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; padding: 13px 26px; background: var(--accent); color: #050605; border: none; border-radius: 2px; cursor: pointer; text-decoration: none; font-weight: 700; transition: opacity 0.2s, transform 0.1s; }
+    .btn-primary:hover { opacity: 0.85; transform: translateY(-1px); }
+    .btn-ghost { font-family: var(--mono); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; padding: 12px 26px; background: transparent; color: var(--text); border: 1px solid var(--border); border-radius: 2px; cursor: pointer; text-decoration: none; transition: border-color 0.2s, color 0.2s; }
+    .btn-ghost:hover { border-color: rgba(255,255,255,0.3); color: #fff; }
+
+    /* STATS */
+    .stats-strip { display: grid; grid-template-columns: repeat(4, 1fr); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+    .stat { padding: 28px 48px; border-right: 1px solid var(--border); }
+    .stat:last-child { border-right: none; }
+    .stat-num { font-size: 32px; font-weight: 800; letter-spacing: -0.03em; color: var(--accent); line-height: 1; margin-bottom: 6px; }
+    .stat-label { font-family: var(--mono); font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.12em; }
+
+    /* SECTIONS */
+    .section { padding: 64px 48px; border-bottom: 1px solid var(--border); }
+    .section-header { display: flex; align-items: baseline; gap: 16px; margin-bottom: 40px; }
+    .section-num { font-family: var(--mono); font-size: 11px; color: var(--accent); letter-spacing: 0.1em; }
+    .section-title { font-size: 22px; font-weight: 700; letter-spacing: -0.02em; }
+    .section-line { flex: 1; height: 1px; background: var(--border); margin-left: 8px; }
+
+    /* ARCH */
+    .arch-diagram { display: flex; flex-direction: column; gap: 2px; background: var(--bg2); border: 1px solid var(--border); border-radius: 4px; padding: 32px; position: relative; overflow: hidden; }
+    .arch-diagram::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; background: linear-gradient(90deg, var(--accent2), var(--accent)); }
+    .arch-row { display: flex; gap: 8px; align-items: stretch; }
+    .arch-label { font-family: var(--mono); font-size: 10px; color: var(--muted); letter-spacing: 0.1em; text-transform: uppercase; width: 80px; display: flex; align-items: center; flex-shrink: 0; }
+    .arch-blocks { display: flex; gap: 8px; flex: 1; }
+    .arch-block { flex: 1; padding: 14px 16px; border-radius: 3px; font-family: var(--mono); font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-align: center; transition: transform 0.15s; }
+    .arch-block:hover { transform: translateY(-2px); }
+    .block-trunk { background: rgba(124,107,255,0.12); border: 1px solid rgba(124,107,255,0.35); color: #b0a8ff; }
+    .block-lstm  { background: rgba(0,229,160,0.08);   border: 1px solid rgba(0,229,160,0.25);   color: var(--accent); }
+    .block-sac   { background: rgba(255,180,60,0.08);  border: 1px solid rgba(255,180,60,0.22);  color: #ffb43c; }
+    .block-domain { background: rgba(232,234,240,0.04); border: 1px solid var(--border); color: rgba(232,234,240,0.6); font-size: 10px; font-weight: 400; }
+    .block-domain .d-name { display: block; font-weight: 700; font-size: 11px; color: var(--text); margin-bottom: 3px; }
+    .arch-arrow-row { display: flex; justify-content: center; padding: 4px 0; margin-left: 88px; }
+    .arch-arrow-row span { font-family: var(--mono); font-size: 10px; color: rgba(124,107,255,0.5); letter-spacing: 0.05em; }
+
+    /* DOMAINS */
+    .domains-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: var(--border); border: 1px solid var(--border); border-radius: 4px; overflow: hidden; }
+    .domain-card { background: var(--bg2); padding: 28px 24px; transition: background 0.2s; }
+    .domain-card:hover { background: var(--bg3); }
+    .domain-icon { font-size: 22px; margin-bottom: 14px; display: block; }
+    .domain-name { font-size: 15px; font-weight: 700; margin-bottom: 6px; letter-spacing: -0.01em; }
+    .domain-desc { font-family: var(--mono); font-size: 10px; color: var(--muted); line-height: 1.7; letter-spacing: 0.03em; }
+    .domain-tag { display: inline-block; margin-top: 12px; font-family: var(--mono); font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; padding: 3px 8px; border-radius: 2px; }
+
+    /* ABOUT + STACK */
+    .about-strip { display: grid; grid-template-columns: 1fr 1fr; gap: 48px; align-items: start; }
+    .about-text h3 { font-size: 20px; font-weight: 700; margin-bottom: 16px; letter-spacing: -0.02em; line-height: 1.25; }
+    .about-text p { font-family: var(--mono); font-size: 11px; color: var(--muted); line-height: 1.9; letter-spacing: 0.03em; }
+    .about-text p + p { margin-top: 12px; }
+    .about-text strong { color: var(--text); }
+    .tech-stack { display: flex; flex-direction: column; gap: 8px; }
+    .tech-item { display: flex; align-items: center; justify-content: space-between; padding: 11px 16px; background: var(--bg2); border: 1px solid var(--border); border-radius: 3px; font-family: var(--mono); font-size: 11px; }
+    .tech-key { color: var(--accent); letter-spacing: 0.06em; }
+    .tech-val { color: var(--muted); font-size: 10px; }
+
+    /* ROADMAP */
+    .coming-soon { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--border); border: 1px solid var(--border); border-radius: 4px; overflow: hidden; }
+    .cs-card { background: var(--bg2); padding: 28px 24px; position: relative; }
+    .cs-badge { display: inline-block; margin-bottom: 12px; font-family: var(--mono); font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); border: 1px solid var(--border); padding: 2px 7px; border-radius: 2px; }
+    .cs-title { font-size: 15px; font-weight: 700; margin-bottom: 8px; letter-spacing: -0.01em; }
+    .cs-desc { font-family: var(--mono); font-size: 10px; color: var(--muted); line-height: 1.7; }
+
+    /* FOOTER */
+    footer { padding: 32px 48px; display: flex; align-items: center; justify-content: space-between; border-top: 1px solid var(--border); }
+    .footer-left { font-family: var(--mono); font-size: 10px; color: var(--muted); letter-spacing: 0.08em; }
+    .footer-left a { color: var(--accent); text-decoration: none; }
+    .footer-left a:hover { text-decoration: underline; }
+    .racoon-badge { font-family: var(--mono); font-size: 10px; color: var(--muted); letter-spacing: 0.1em; text-transform: uppercase; display: flex; align-items: center; gap: 8px; }
+    .racoon-badge::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 8px var(--accent); display: inline-block; }
+
+    /* ANIMATIONS */
+    @keyframes fadeUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+    .hero-tag      { animation: fadeUp 0.5s ease both 0.1s; opacity: 0; }
+    .hero-title    { animation: fadeUp 0.5s ease both 0.2s; opacity: 0; }
+    .hero-subtitle { animation: fadeUp 0.5s ease both 0.3s; opacity: 0; }
+    .hero-ctas     { animation: fadeUp 0.5s ease both 0.4s; opacity: 0; }
+    .stats-strip   { animation: fadeUp 0.5s ease both 0.5s; opacity: 0; }
+
+    /* RESPONSIVE */
+    @media (max-width: 900px) {
+      nav { padding: 16px 20px; }
+      .nav-links { display: none; }
+      .hero { padding: 64px 24px 48px; }
+      .stats-strip { grid-template-columns: repeat(2, 1fr); }
+      .stat { padding: 20px 24px; }
+      .section { padding: 48px 24px; }
+      .domains-grid { grid-template-columns: repeat(2, 1fr); }
+      .about-strip { grid-template-columns: 1fr; }
+      .coming-soon { grid-template-columns: 1fr; }
+      footer { flex-direction: column; gap: 16px; text-align: center; padding: 24px; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <div class="nav-logo">MARA <span>/ RacoonSoftLab</span></div>
+  <ul class="nav-links">
+    <li><a href="#about"        data-es="Sobre MARA"   data-en="About">Sobre MARA</a></li>
+    <li><a href="#architecture" data-es="Arquitectura" data-en="Architecture">Arquitectura</a></li>
+    <li><a href="#domains"      data-es="Dominios"     data-en="Domains">Dominios</a></li>
+    <li><a href="#project"      data-es="Proyecto"     data-en="Project">Proyecto</a></li>
+    <li><a href="#roadmap"      data-es="Roadmap"      data-en="Roadmap">Roadmap</a></li>
+  </ul>
+  <div class="nav-right">
+    <div class="nav-badge">v5 · RTX 4060</div>
+    <div class="lang-toggle">
+      <button class="lang-btn active" id="btn-es" onclick="setLang('es')">ES</button>
+      <button class="lang-btn"        id="btn-en" onclick="setLang('en')">EN</button>
+    </div>
+  </div>
+</nav>
+
+<!-- HERO -->
+<section class="hero" id="about">
+  <div class="hero-grid"></div>
+  <div class="hero-glow"></div>
+  <div class="hero-tag"
+       data-es="Aprendizaje por Refuerzo Multi-Agente — 2025"
+       data-en="Multi-Agent Reinforcement Learning — 2025">
+    Aprendizaje por Refuerzo Multi-Agente — 2025
+  </div>
+  <h1 class="hero-title">
+    <em>MARA</em><br>
+    <span class="dim" data-es="Modelo de"           data-en="AI-Driven">Modelo de</span>
+    <span            data-es="Autorregulación"      data-en="Adaptive Resource">Autorregulación</span><br>
+    <span class="dim" data-es="por"                 data-en="Management via">por</span>
+    <span            data-es="Inteligencia Artificial" data-en="Artificial Intelligence">Inteligencia Artificial</span>
+  </h1>
+  <p class="hero-subtitle"
+     data-es="Sistema multi-agente <strong>LSTM-SAC</strong> con trunk compartido y transferencia cross-dominio.<br>Gestión adaptativa de recursos bajo demanda estocástica en <strong>4 dominios</strong>: hospital, educación, call center y banca."
+     data-en="Multi-agent <strong>LSTM-SAC</strong> system with shared trunk and cross-domain transfer learning.<br>Adaptive resource management under stochastic demand across <strong>4 domains</strong>: healthcare, education, call center &amp; banking.">
+    Sistema multi-agente <strong>LSTM-SAC</strong> con trunk compartido y transferencia cross-dominio.<br>
+    Gestión adaptativa de recursos bajo demanda estocástica en <strong>4 dominios</strong>: hospital, educación, call center y banca.
+  </p>
+  <div class="hero-ctas">
+    <a class="btn-primary" href="#"
+       data-es="Ver paper" data-en="View paper">Ver paper</a>
+    <a class="btn-ghost" href="https://github.com" target="_blank">GitHub</a>
+    <a class="btn-ghost" href="mailto:leo92esquivel@gmail.com"
+       data-es="Colaborar" data-en="Collaborate">Colaborar</a>
+  </div>
+</section>
+
+<!-- STATS STRIP -->
+<div class="stats-strip">
+  <div class="stat">
+    <div class="stat-num">4</div>
+    <div class="stat-label" data-es="Dominios simulados"    data-en="Simulated domains">Dominios simulados</div>
+  </div>
+  <div class="stat">
+    <div class="stat-num">LSTM-SAC</div>
+    <div class="stat-label" data-es="Arquitectura base"     data-en="Base architecture">Arquitectura base</div>
+  </div>
+  <div class="stat">
+    <div class="stat-num">float16</div>
+    <div class="stat-label" data-es="AMP · RTX 4060"        data-en="AMP · RTX 4060">AMP · RTX 4060</div>
+  </div>
+  <div class="stat">
+    <div class="stat-num">SimPy</div>
+    <div class="stat-label" data-es="Simulación de eventos" data-en="Event simulation">Simulación de eventos</div>
+  </div>
+</div>
+
+<!-- ARCHITECTURE -->
+<section class="section" id="architecture">
+  <div class="section-header">
+    <span class="section-num">01</span>
+    <span class="section-title" data-es="Arquitectura" data-en="Architecture">Arquitectura</span>
+    <div class="section-line"></div>
+  </div>
+  <div class="arch-diagram">
+    <div class="arch-row">
+      <div class="arch-label" data-es="Entrada" data-en="Input">Entrada</div>
+      <div class="arch-blocks">
+        <div class="arch-block block-domain">
+          <span class="d-name" data-es="Hospital"    data-en="Healthcare">Hospital</span>SimPy env
+        </div>
+        <div class="arch-block block-domain">
+          <span class="d-name" data-es="Educación"   data-en="Education">Educación</span>SimPy env
+        </div>
+        <div class="arch-block block-domain">
+          <span class="d-name" data-es="Call center" data-en="Call center">Call center</span>SimPy env
+        </div>
+        <div class="arch-block block-domain">
+          <span class="d-name">BankSim</span>SimPy env
+        </div>
+      </div>
+    </div>
+    <div class="arch-arrow-row">
+      <span data-es="↓ estados s_t" data-en="↓ states s_t">↓ estados s_t</span>
+    </div>
+    <div class="arch-row">
+      <div class="arch-label" data-es="Memoria" data-en="Memory">Memoria</div>
+      <div class="arch-blocks">
+        <div class="arch-block block-lstm" style="flex:4"
+             data-es="LSTM — extracción de dependencias temporales"
+             data-en="LSTM — temporal dependency extraction">
+          LSTM — extracción de dependencias temporales
+        </div>
+      </div>
+    </div>
+    <div class="arch-arrow-row">
+      <span data-es="↓ representación h_t → trunk compartido"
+            data-en="↓ latent representation h_t → shared trunk">
+        ↓ representación h_t → trunk compartido
+      </span>
+    </div>
+    <div class="arch-row">
+      <div class="arch-label">Trunk</div>
+      <div class="arch-blocks">
+        <div class="arch-block block-trunk" style="flex:4"
+             data-es="Shared Trunk — transferencia cross-dominio"
+             data-en="Shared Trunk — cross-domain knowledge transfer">
+          Shared Trunk — transferencia cross-dominio
+        </div>
+      </div>
+    </div>
+    <div class="arch-arrow-row">
+      <span data-es="↓ actor / critic heads" data-en="↓ actor / critic heads">↓ actor / critic heads</span>
+    </div>
+    <div class="arch-row">
+      <div class="arch-label">Policy</div>
+      <div class="arch-blocks">
+        <div class="arch-block block-sac" style="flex:4"
+             data-es="SAC — Soft Actor-Critic (entropía máxima)"
+             data-en="SAC — Soft Actor-Critic (maximum entropy)">
+          SAC — Soft Actor-Critic (entropía máxima)
+        </div>
+      </div>
+    </div>
+    <div class="arch-arrow-row">
+      <span data-es="↓ acciones a_t" data-en="↓ actions a_t">↓ acciones a_t</span>
+    </div>
+    <div class="arch-row">
+      <div class="arch-label" data-es="Salida" data-en="Output">Salida</div>
+      <div class="arch-blocks">
+        <div class="arch-block block-domain">
+          <span class="d-name" data-es="Recursos"  data-en="Resources">Recursos</span>
+          <span data-es="asignados"  data-en="allocated">asignados</span>
+        </div>
+        <div class="arch-block block-domain">
+          <span class="d-name" data-es="Espera"    data-en="Wait time">Espera</span>
+          <span data-es="minimizada" data-en="minimized">minimizada</span>
+        </div>
+        <div class="arch-block block-domain">
+          <span class="d-name" data-es="Carga"     data-en="Load">Carga</span>
+          <span data-es="balanceada" data-en="balanced">balanceada</span>
+        </div>
+        <div class="arch-block block-domain">
+          <span class="d-name" data-es="Fraude"    data-en="Fraud">Fraude</span>
+          <span data-es="mitigado"   data-en="mitigated">mitigado</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- DOMAINS -->
+<section class="section" id="domains">
+  <div class="section-header">
+    <span class="section-num">02</span>
+    <span class="section-title"
+          data-es="Dominios de simulación"
+          data-en="Simulation domains">Dominios de simulación</span>
+    <div class="section-line"></div>
+  </div>
+  <div class="domains-grid">
+    <div class="domain-card">
+      <span class="domain-icon" style="color:#ff6b6b">&#xff0b;</span>
+      <div class="domain-name" data-es="Hospital"    data-en="Healthcare">Hospital</div>
+      <div class="domain-desc"
+           data-es="Asignación de camas y personal bajo demanda estocástica de pacientes. Optimización de tiempos de espera y ocupación de recursos críticos."
+           data-en="Bed and staff allocation under stochastic patient demand. Wait time optimization and critical resource utilization.">
+        Asignación de camas y personal bajo demanda estocástica de pacientes. Optimización de tiempos de espera y ocupación de recursos críticos.
+      </div>
+      <span class="domain-tag" style="background:rgba(255,107,107,0.1);color:#ff6b6b;border:1px solid rgba(255,107,107,0.25)">Healthcare</span>
+    </div>
+    <div class="domain-card">
+      <span class="domain-icon" style="color:#74b9ff">&#9632;</span>
+      <div class="domain-name" data-es="Educación"   data-en="Education">Educación</div>
+      <div class="domain-desc"
+           data-es="Gestión de aulas y docentes ante variación de matrícula en tiempo real. Minimización de conflictos de recursos académicos."
+           data-en="Classroom and faculty management under real-time enrollment changes. Academic resource conflict minimization.">
+        Gestión de aulas y docentes ante variación de matrícula en tiempo real. Minimización de conflictos de recursos académicos.
+      </div>
+      <span class="domain-tag" style="background:rgba(116,185,255,0.1);color:#74b9ff;border:1px solid rgba(116,185,255,0.25)">Education</span>
+    </div>
+    <div class="domain-card">
+      <span class="domain-icon" style="color:#a29bfe">&#9650;</span>
+      <div class="domain-name" data-es="Call Center" data-en="Call Center">Call Center</div>
+      <div class="domain-desc"
+           data-es="Enrutamiento y asignación de agentes a colas con carga variable. Balanceo dinámico para reducir abandono y tiempo de atención."
+           data-en="Agent routing and queue assignment under variable load. Dynamic balancing to reduce call abandonment and handle time.">
+        Enrutamiento y asignación de agentes a colas con carga variable. Balanceo dinámico para reducir abandono y tiempo de atención.
+      </div>
+      <span class="domain-tag" style="background:rgba(162,155,254,0.1);color:#a29bfe;border:1px solid rgba(162,155,254,0.25)">Operations</span>
+    </div>
+    <div class="domain-card">
+      <span class="domain-icon" style="color:#00e5a0">&#9679;</span>
+      <div class="domain-name">BankSim</div>
+      <div class="domain-desc"
+           data-es="Gestión de riesgo y recursos bancarios con detección de patrones anómalos. Simulación de flujo transaccional bajo distribuciones realistas."
+           data-en="Banking risk and resource management with anomalous pattern detection. Transactional flow simulation under realistic distributions.">
+        Gestión de riesgo y recursos bancarios con detección de patrones anómalos. Simulación de flujo transaccional bajo distribuciones realistas.
+      </div>
+      <span class="domain-tag" style="background:rgba(0,229,160,0.1);color:#00e5a0;border:1px solid rgba(0,229,160,0.25)">Finance</span>
+    </div>
+  </div>
+</section>
+
+<!-- PROJECT -->
+<section class="section" id="project">
+  <div class="section-header">
+    <span class="section-num">03</span>
+    <span class="section-title" data-es="Proyecto" data-en="Project">Proyecto</span>
+    <div class="section-line"></div>
+  </div>
+  <div class="about-strip">
+    <div class="about-text">
+      <h3 data-es="Gestión adaptativa de recursos<br>bajo demanda estocástica"
+          data-en="Adaptive resource management<br>under stochastic demand">
+        Gestión adaptativa de recursos<br>bajo demanda estocástica
+      </h3>
+      <p data-es="MARA propone un framework de <strong>aprendizaje por refuerzo profundo multi-agente</strong> capaz de operar simultáneamente en entornos de alta variabilidad e incertidumbre."
+         data-en="MARA proposes a <strong>multi-agent deep reinforcement learning</strong> framework capable of operating simultaneously across high-variability, high-uncertainty environments.">
+        MARA propone un framework de <strong>aprendizaje por refuerzo profundo multi-agente</strong> capaz de operar simultáneamente en entornos de alta variabilidad e incertidumbre.
+      </p>
+      <p data-es="La innovación central es el <strong>trunk compartido</strong>: una representación latente común que permite transferencia de conocimiento entre dominios heterogéneos, reduciendo el costo de entrenamiento y mejorando la adaptabilidad del sistema."
+         data-en="The core innovation is the <strong>shared trunk</strong>: a common latent representation enabling knowledge transfer across heterogeneous domains, lowering training cost and improving system adaptability.">
+        La innovación central es el <strong>trunk compartido</strong>: una representación latente común que permite transferencia de conocimiento entre dominios heterogéneos, reduciendo el costo de entrenamiento y mejorando la adaptabilidad del sistema.
+      </p>
+      <p data-es="Desarrollado en <strong>Camagüey, Cuba</strong> como proyecto independiente de <strong>RacoonSoftLab</strong>, con afiliación a la Universidad de Camagüey Ignacio Agramonte Loynaz. Registrado en el Nodo co-Lab de la Unión de Informáticos de Cuba."
+         data-en="Developed in <strong>Camagüey, Cuba</strong> as an independent project by <strong>RacoonSoftLab</strong>, affiliated with the Universidad de Camagüey Ignacio Agramonte Loynaz. Registered at the co-Lab Node of the Cuban Informatics Union.">
+        Desarrollado en <strong>Camagüey, Cuba</strong> como proyecto independiente de <strong>RacoonSoftLab</strong>, con afiliación a la Universidad de Camagüey Ignacio Agramonte Loynaz. Registrado en el Nodo co-Lab de la Unión de Informáticos de Cuba.
+      </p>
+    </div>
+    <div class="tech-stack">
+      <div class="tech-item">
+        <span class="tech-key">Framework</span><span class="tech-val">PyTorch + AMP float16</span>
+      </div>
+      <div class="tech-item">
+        <span class="tech-key" data-es="Simulación" data-en="Simulation">Simulación</span>
+        <span class="tech-val">SimPy (eventos discretos)</span>
+      </div>
+      <div class="tech-item">
+        <span class="tech-key">Hardware</span><span class="tech-val">NVIDIA RTX 4060 8GB</span>
+      </div>
+      <div class="tech-item">
+        <span class="tech-key" data-es="Lenguaje" data-en="Language">Lenguaje</span>
+        <span class="tech-val">Python 3.12 · Windows</span>
+      </div>
+      <div class="tech-item">
+        <span class="tech-key" data-es="Política" data-en="Policy">Política</span>
+        <span class="tech-val">Soft Actor-Critic (SAC)</span>
+      </div>
+      <div class="tech-item">
+        <span class="tech-key" data-es="Memoria" data-en="Memory">Memoria</span>
+        <span class="tech-val">LSTM secuencial</span>
+      </div>
+      <div class="tech-item">
+        <span class="tech-key" data-es="Optimización" data-en="Optimization">Optimización</span>
+        <span class="tech-val">torch.amp · float16</span>
+      </div>
+      <div class="tech-item">
+        <span class="tech-key" data-es="Estado" data-en="Status">Estado</span>
+        <span class="tech-val" data-es="Piloto · en revisión" data-en="Pilot · under review">Piloto · en revisión</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ROADMAP -->
+<section class="section" id="roadmap">
+  <div class="section-header">
+    <span class="section-num">04</span>
+    <span class="section-title">Roadmap</span>
+    <div class="section-line"></div>
+  </div>
+  <div class="coming-soon">
+    <div class="cs-card">
+      <span class="cs-badge" data-es="próximamente" data-en="coming soon">próximamente</span>
+      <div class="cs-title" data-es="Resultados &amp; Métricas" data-en="Results &amp; Metrics">Resultados &amp; Métricas</div>
+      <div class="cs-desc"
+           data-es="Gráficas comparativas de los 4 dominios. Ablation study del trunk compartido vs. SAC individual. Análisis estadístico de convergencia."
+           data-en="Comparative charts across all 4 domains. Ablation study: shared trunk vs. standalone SAC. Statistical convergence analysis.">
+        Gráficas comparativas de los 4 dominios. Ablation study del trunk compartido vs. SAC individual. Análisis estadístico de convergencia.
+      </div>
+    </div>
+    <div class="cs-card">
+      <span class="cs-badge" data-es="próximamente" data-en="coming soon">próximamente</span>
+      <div class="cs-title" data-es="Paper / Publicación" data-en="Paper / Publication">Paper / Publicación</div>
+      <div class="cs-desc"
+           data-es="Manuscrito en preparación. Objetivo: ICAIF o conferencia iberoamericana de IA. Enlace a arXiv cuando esté disponible."
+           data-en="Manuscript in preparation. Target venue: ICAIF or Ibero-American AI conference. arXiv link when available.">
+        Manuscrito en preparación. Objetivo: ICAIF o conferencia iberoamericana de IA. Enlace a arXiv cuando esté disponible.
+      </div>
+    </div>
+    <div class="cs-card">
+      <span class="cs-badge" data-es="próximamente" data-en="coming soon">próximamente</span>
+      <div class="cs-title" data-es="Repositorio GitHub" data-en="GitHub Repository">Repositorio GitHub</div>
+      <div class="cs-desc"
+           data-es="Código fuente, notebooks y datos de entrenamiento. Licencia open-source una vez publicado el paper."
+           data-en="Source code, training notebooks, and datasets. Open-source license upon paper publication.">
+        Código fuente, notebooks y datos de entrenamiento. Licencia open-source una vez publicado el paper.
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="footer-left">
+    MARA &copy; 2025 &mdash;
+    <a href="mailto:leo92esquivel@gmail.com">leo92esquivel@gmail.com</a>
+    &mdash;
+    <span data-es="Universidad de Camagüey Ignacio Agramonte Loynaz"
+          data-en="Universidad de Camagüey Ignacio Agramonte Loynaz">
+      Universidad de Camagüey Ignacio Agramonte Loynaz
+    </span>
+  </div>
+  <div class="racoon-badge">RacoonSoftLab</div>
+</footer>
+
+<script>
+  function setLang(lang) {
+    document.documentElement.lang = lang;
+    document.getElementById('btn-es').classList.toggle('active', lang === 'es');
+    document.getElementById('btn-en').classList.toggle('active', lang === 'en');
+    document.querySelectorAll('[data-' + lang + ']').forEach(function(el) {
+      el.innerHTML = el.getAttribute('data-' + lang);
+    });
+  }
+</script>
+
+</body>
+</html>
